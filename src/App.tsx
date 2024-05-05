@@ -279,6 +279,9 @@ const App: React.FC = () => {
           </Typography>
           {account ? (
             <>
+                  <Typography variant="body2" sx={{ ml: 1 }}>
+                    Reputation: {reputation}
+                  </Typography>
                 <AccountBalanceWalletIcon fontSize="small" />
                   <Typography variant="body2" sx={{ ml: 1 }}>
                     {balance.substring(0, 6)} ETH
