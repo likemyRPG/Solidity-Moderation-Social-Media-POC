@@ -16,6 +16,8 @@ import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import { Tooltip } from '@mui/material';
 import Divider from '@mui/material/Divider';
 import Grid from '@mui/material/Grid';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
 
 import contentContract from './contracts/ContentContract.json';
 import reputationSystemContract from './contracts/ReputationSystemContract.json';
@@ -93,6 +95,7 @@ const App: React.FC = () => {
   const [loadingVotes, setLoadingVotes] = useState<boolean[]>([]);
   const [snackbar, setSnackbar] = useState<{ open: boolean, message: string, severity: Severity }>({ open: false, message: '', severity: 'info' });
   const [balance, setBalance] = useState<string>('0');
+  const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
 
   const provider = new Web3.providers.HttpProvider("http://127.0.0.1:7545");
   const web3 = new Web3(provider);
@@ -109,7 +112,7 @@ const App: React.FC = () => {
         package: WalletConnectProvider,
         options: {
           rpc: {
-            5777: 'http://127.0.0.1:7545' // Your local Ganache RPC URL
+            5777: 'http://127.0.0.1:7545',
           }
         }
       }
@@ -118,28 +121,41 @@ const App: React.FC = () => {
 
   // Define the connectWallet function
   const connectWallet = async () => {
-    const provider = await web3Modal.connect(); // Connect using Web3Modal
-    const web3 = new Web3(provider);
+    try {
+      const provider = await web3Modal.connect(); // Connect using Web3Modal
+      const web3 = new Web3(provider);
 
-    provider.on("accountsChanged", (accounts: string[]) => {
-      if (accounts.length > 0) {
-        setAccount(accounts[0]);
-        loadReputationAndPosts(accounts[0], web3);
-      } else {
+      provider.on("accountsChanged", (accounts: string[]) => {
+        if (accounts.length > 0) {
+          setAccount(accounts[0]);
+          loadReputationAndPosts(accounts[0], web3);
+        } else {
+          setAccount('');
+        }
+      });
+
+      provider.on("chainChanged", (_chainId: number) => window.location.reload());
+
+      provider.on("disconnect", (_error: { code: number; message: string }) => {
         setAccount('');
-      }
-    });
+      });
 
-    provider.on("chainChanged", (_chainId: number) => window.location.reload());
-
-    provider.on("disconnect", (_error: { code: number; message: string }) => {
-      setAccount('');
-    });
-
-    const accounts = await web3.eth.getAccounts();
-    setAccount(accounts[0]);
-    updateBalance(accounts[0]);
-    await loadReputationAndPosts(accounts[0], web3);
+      const accounts = await web3.eth.getAccounts();
+      setAccount(accounts[0]);
+      updateBalance(accounts[0]);
+      await loadReputationAndPosts(accounts[0], web3);
+    }
+    catch (error) {
+      console.error("Error connecting to wallet:", error);
+        // Handle errors like user closing the modal here
+        if(error instanceof Error && error.message === "Modal closed by user") {
+            console.log("Wallet connection cancelled by user.");
+            setSnackbar({ open: true, message: 'Wallet connection cancelled by user.', severity: 'info' });
+        } else {
+            console.error("An unexpected error occurred:", error);
+            setSnackbar({ open: true, message: 'Something went wrong while connecting to your wallet.', severity: 'error' });
+        }
+    }
   };
 
   const updateBalance = async (account: string) => {
@@ -178,11 +194,10 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {  
-    // Initialize wallet connection on component mount
     if (web3Modal.cachedProvider) {
       connectWallet();
     }
-  
+    setMenuAnchorEl(null);
   }, [web3Modal.cachedProvider]);
 
   const handleConnectWallet = async () => {
@@ -241,14 +256,6 @@ const App: React.FC = () => {
 
   const handleCloseSnackbar = () => setSnackbar({ ...snackbar, open: false });
 
-  const handleConnectClick = () => {
-    if (account) {
-      disconnectWallet();
-    } else {
-      connectWallet();
-    }
-  };
-
   const disconnectWallet = () => {
     web3Modal.clearCachedProvider();
     setAccount('');
@@ -256,76 +263,75 @@ const App: React.FC = () => {
     setPosts([]);
   };
 
+  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setMenuAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setMenuAnchorEl(null);
+  };
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <AppBar position="static">
+      <AppBar position="static" color="primary">
         <Toolbar>
-          <Grid container alignItems="center" justifyContent="space-between">
-            <Grid item>
-              <IconButton edge="start" color="inherit" aria-label="menu">
-                <MenuIcon />
-              </IconButton>
-            </Grid>
-            <Grid item xs>
-              <Typography variant="h6" align="center">
-                Decentralized Content Platform
-              </Typography>
-            </Grid>
-            <Grid item>
-              {account ? (
-                <div>
-                  <Tooltip title="Wallet Address">
-                    <IconButton color="inherit">
-                      <AccountCircle />
-                      <Typography variant="caption" sx={{ ml: 1 }}>
-                        {account.substring(0, 6)}...{account.substring(account.length - 4)}
-                      </Typography>
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="ETH Balance">
-                    <IconButton color="inherit">
-                      <AccountBalanceWalletIcon />
-                      <Typography variant="caption" sx={{ ml: 1 }}>
-                        {balance} ETH
-                      </Typography>
-                    </IconButton>
-                  </Tooltip>
-                  <Divider orientation="vertical" flexItem sx={{ mx: 2 }} />
-                  <Typography variant="caption" sx={{ verticalAlign: 'middle' }}>
-                    Reputation: {reputation}
+          <Typography variant="h6" component="div" sx={{ flexGrow: 1, textAlign: 'center' }}>
+            Decentralized Content Platform
+          </Typography>
+          {account ? (
+            <>
+                <AccountBalanceWalletIcon fontSize="small" />
+                  <Typography variant="body2" sx={{ ml: 1 }}>
+                    {balance.substring(0, 6)} ETH
                   </Typography>
-                  <Button color="inherit" onClick={handleConnectClick} sx={{ ml: 2 }}>
-                    Logout
-                  </Button>
-                </div>
-              ) : (
-                <Button color="inherit" onClick={handleConnectClick}>
-                  Connect Wallet
-                </Button>
-              )}
-            </Grid>
-          </Grid>
+              <IconButton color="inherit" onClick={handleMenuOpen}>
+                <AccountCircle />
+              </IconButton>
+              <Menu
+                anchorEl={menuAnchorEl}
+                open={Boolean(menuAnchorEl)}
+                onClose={handleMenuClose}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}  // Controls where the menu is anchored in relation to the IconButton
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}  // Controls the origin point of the Menu animation
+              >
+                <MenuItem onClick={handleMenuClose}>
+                  <Typography variant="body2" noWrap>
+                    {account.substring(0, 6)}...{account.substring(account.length - 4)}
+                  </Typography>
+                </MenuItem>
+                <MenuItem onClick={disconnectWallet}>Logout</MenuItem>
+              </Menu>
+            </>
+          ) : (
+            <Button color="inherit" onClick={connectWallet}>Connect Wallet</Button>
+          )}
         </Toolbar>
       </AppBar>
       <Container maxWidth="md">
-        <Typography variant="h3" component="h1" sx={{ textAlign: 'center', my: 3 }}>
-          Decentralized Content Platform
+      <Typography variant="h4" align="center" sx={{ my: 4 }}>
+          {account ? 'Post Your Thoughts' : 'Connect Your Wallet'}
         </Typography>
-        <Box sx={{ display: 'flex', justifyContent: 'center', flexDirection: 'column', alignItems: 'center' }}>
-          <TextField
-            fullWidth
-            label="Write something..."
-            value={newPost}
-            onChange={e => setNewPost(e.target.value)}
-            variant="outlined"
-            sx={{ width: '80%' }}
-          />
-          <Button variant="contained" color="primary" onClick={handleNewPost} disabled={!newPost || loading} sx={{ mt: 2 }}>
-            Post
-          </Button>
-          {loading && <CircularProgress />}
-        </Box>
+        {account ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', flexDirection: 'column', alignItems: 'center', mt: 3 }}>
+            <TextField
+              fullWidth
+              label="Write something..."
+              value={newPost}
+              onChange={e => setNewPost(e.target.value)}
+              variant="outlined"
+              sx={{ width: '80%' }}
+            />
+            <Button variant="contained" color="primary" onClick={handleNewPost} disabled={!newPost || loading} sx={{ mt: 2 }}>
+              Post
+            </Button>
+            {loading && <CircularProgress />}
+          </Box>
+          ) : (
+            <Button variant="contained" color="primary" onClick={handleConnectWallet} fullWidth>
+              Connect Wallet
+            </Button>
+          )}
         <PostContainer>
           {posts.map(post => (
             <StyledCard key={post.id}>
