@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, Typography, List, ListItem, Divider } from '@mui/material';
+import { Card, CardContent, Typography, List, ListItem, Divider, Grid, Tooltip } from '@mui/material';
 import Web3 from 'web3';
 import contractData from '../contracts/ContentContract.json';
 import { AbiItem } from 'web3-utils';
@@ -7,6 +7,8 @@ import { AbiItem } from 'web3-utils';
 interface IBlockchainEvent {
   event: string;
   blockNumber: number;
+  timestamp: string;
+  transactionHash: string;
   returnValues: {
     [key: string]: any;
   };
@@ -30,15 +32,18 @@ const BlockchainActivityLog: React.FC<BlockchainActivityLogProps> = ({ web3 }) =
           fromBlock: 0,
           toBlock: 'latest'
         });
-        console.log(eventList);
-        // Mapping raw event data to IBlockchainEvent format, if necessary
-        const formattedEvents: IBlockchainEvent[] = eventList.map(event => ({
-          event: event.event,
-          blockNumber: event.blockNumber,
-          returnValues: event.returnValues,
+        const formattedEvents: IBlockchainEvent[] = await Promise.all(eventList.map(async (event) => {
+          const block: any = await web3.eth.getBlock(event.blockNumber);
+          return {
+            event: event.event,
+            blockNumber: event.blockNumber,
+            timestamp: new Date(block.timestamp * 1000).toLocaleString(),
+            transactionHash: event.transactionHash,
+            returnValues: event.returnValues,
+          };
         }));
         setEvents(formattedEvents);
-      } catch ( error ) {
+      } catch (error) {
         console.error('Error fetching events:', error);
       }
     };
@@ -47,18 +52,34 @@ const BlockchainActivityLog: React.FC<BlockchainActivityLogProps> = ({ web3 }) =
   }, [web3]);
 
   return (
-    <Card sx={{ margin: 2 }}>
+    <Card sx={{ margin: 2, width: '100%' }}>
       <CardContent>
         <Typography variant="h6" gutterBottom>
           Blockchain Activity Log
         </Typography>
-        <List>
+        <List sx={{ width: '100%' }}>
           {events.map((event, index) => (
             <React.Fragment key={index}>
               <ListItem>
-                <Typography variant="body2">
-                  {`Event: ${event.event}, Block: ${event.blockNumber}, Data: ${JSON.stringify(event.returnValues)}`}
-                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={3}>
+                    <Typography variant="subtitle1">{event.event}</Typography>
+                    <Typography variant="body2" color="textSecondary">Block: {event.blockNumber}</Typography>
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <Typography variant="body2">Timestamp: {event.timestamp}</Typography>
+                  </Grid>
+                  <Grid item xs={12} md={5}>
+                    <Tooltip title={event.transactionHash} placement="bottom" arrow>
+                      <Typography variant="body2" noWrap>Transaction Hash: {`${event.transactionHash}...`}</Typography>
+                    </Tooltip>
+                  </Grid>
+                  <Grid item xs={12}>
+                  <Typography variant="body2">
+                      Data: {Object.entries(event.returnValues).map(([key, value]) => `${key}: ${value}`).join(', ')}
+                    </Typography>
+                  </Grid>
+                </Grid>
               </ListItem>
               {index < events.length - 1 && <Divider />}
             </React.Fragment>
