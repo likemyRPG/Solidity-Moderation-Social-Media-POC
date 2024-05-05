@@ -1,25 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import Web3 from 'web3';
-import Web3Modal from 'web3modal';
-import WalletConnectProvider from '@walletconnect/web3-provider';
 import TruffleContract from 'truffle-contract';
 import { Container, TextField, Button, Card, CardContent, Typography, CircularProgress, ThemeProvider, createTheme, CardActions, CardMedia, IconButton, AppBar, Toolbar } from '@mui/material';
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import ThumbDownIcon from '@mui/icons-material/ThumbDown';
-import AccountCircle from '@mui/icons-material/AccountCircle';
 import { styled } from '@mui/system';
 import { Box, CssBaseline } from '@mui/material';
 import Snackbar from '@mui/material/Snackbar';
-import Alert from '@mui/material/Alert';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import Menu from '@mui/material/Menu';
-import MenuItem from '@mui/material/MenuItem';
+import Alert from '@mui/material/Alert'
 import theme from 'src/theme';
 
 import contentContract from '../contracts/ContentContract.json';
 import reputationSystemContract from '../contracts/ReputationSystemContract.json';
-
-import BlockchainActivityLog from '../components/BlockchainActivityLog';
+import { useSnackbar } from '../context/SnackbarContext';
 
 const StyledCard = styled(Card)({
   width: '100%', // Use full container width
@@ -45,8 +38,6 @@ interface Post {
   author: string;
 }
 
-type Severity = 'error' | 'info' | 'success' | 'warning' | undefined;
-
 interface HomeProps {
   web3: Web3;
   account: string;
@@ -58,7 +49,7 @@ const Home: React.FC<HomeProps> = ({ web3, account }) => {
   const [newPost, setNewPost] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [loadingVotes, setLoadingVotes] = useState<boolean[]>([]);
-  const [snackbar, setSnackbar] = useState<{ open: boolean, message: string, severity: Severity }>({ open: false, message: '', severity: 'info' });
+  const { setSnackbar } = useSnackbar();
 
   const ContentContract = TruffleContract(contentContract);
   const ReputationSystemContract = TruffleContract(reputationSystemContract);
@@ -69,16 +60,16 @@ const Home: React.FC<HomeProps> = ({ web3, account }) => {
   const loadReputationAndPosts = async (account: string, web3: Web3) => {
     const ContentContract = TruffleContract(contentContract);
     ContentContract.setProvider(web3.currentProvider);
-
+  
     const ReputationSystemContract = TruffleContract(reputationSystemContract);
     ReputationSystemContract.setProvider(web3.currentProvider);
-
+  
     setLoading(true);
     try {
       const reputationInstance = await ReputationSystemContract.deployed();
       const userReputation = await reputationInstance.getReputation.call(account);
       setReputation(userReputation.toNumber());
-
+  
       const contentInstance = await ContentContract.deployed();
       const contentCountBN = await contentInstance.getContentsCount.call();
       const contentCount = contentCountBN.toNumber();
@@ -94,9 +85,10 @@ const Home: React.FC<HomeProps> = ({ web3, account }) => {
         });
       }
       setPosts(fetchedPosts);
+      setSnackbar({ open: true, message: 'Successfully loaded posts and reputation.', severity: 'success' });
     } catch (error) {
       console.error("Error loading data", error);
-      setSnackbar({ open: true, message: 'An error occurred while loading the app.', severity: 'error' });
+      setSnackbar({ open: true, message: `Failed to load posts and reputation: ${error}`, severity: 'error' });
     } finally {
       setLoading(false);
     }
@@ -128,20 +120,28 @@ const Home: React.FC<HomeProps> = ({ web3, account }) => {
   const handleNewPost = async () => {
     setLoading(true);
     try {
-      const contentInstance = await ContentContract.deployed();
-      await contentInstance.createContent(newPost, { from: account });
-      setNewPost('');
-      const contentCountBN = await contentInstance.getContentsCount();
-      const contentCount = contentCountBN.toNumber();
-      loadPosts(contentCount, contentInstance);
-    } catch (error) {
-      console.error(error);
-      setSnackbar({ open: true, message: 'An error occurred while posting.', severity: 'error' });
+        const contentInstance = await ContentContract.deployed();
+        await contentInstance.createContent(newPost, { from: account })
+            .then(() => {
+                setNewPost('');
+                setSnackbar({ open: true, message: 'Successfully posted.', severity: 'success' });
+            })
+            .catch((error) => {
+                if (error.code === 4001) { // Check if the rejection is because the user denied the transaction
+                    setSnackbar({ open: true, message: 'Transaction signature denied by user.', severity: 'info' });
+                } else {
+                    throw error; // Rethrow if it's a different error
+                }
+            });
+    } catch (error: any) {
+        console.error("Failed to post", error);
+        setSnackbar({ open: true, message: `Failed to post due to an error: ${error.message}`, severity: 'error' });
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
-  };
+};
 
+  
   const handleVote = async (postId, upvote) => {
     setLoadingVotes(prev => ({ ...prev, [postId]: true }));
     try {
@@ -150,15 +150,16 @@ const Home: React.FC<HomeProps> = ({ web3, account }) => {
       await contentInstance.updateScore(postId, change, { from: account });
       const updatedPost = await contentInstance.contents(postId);
       setPosts(prevPosts => prevPosts.map(post => post.id === postId ? { ...post, votes: updatedPost.score.toNumber() } : post));
-    } catch (error) {
+      setSnackbar({ open: true, message: 'Successfully voted.', severity: 'success' });
+    } catch (error: any) {
       console.error("Error voting", error);
-      setSnackbar({ open: true, message: 'Failed to vote', severity: 'error' });
+      const errorMessage = error.code === 4001 ? 'Transaction signature denied.' : 'Failed to vote.';
+      setSnackbar({ open: true, message: errorMessage, severity: 'error' });
     } finally {
       setLoadingVotes(prev => ({ ...prev, [postId]: false }));
     }
   };
 
-  const handleCloseSnackbar = () => setSnackbar({ ...snackbar, open: false });
 
   return (
     <ThemeProvider theme={theme}>
@@ -224,11 +225,6 @@ const Home: React.FC<HomeProps> = ({ web3, account }) => {
             </StyledCard>
           ))}
         </PostContainer>
-        <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleCloseSnackbar}>
-          <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
-            {snackbar.message}
-          </Alert>
-        </Snackbar>
       </Container>
     </ThemeProvider>
   );
