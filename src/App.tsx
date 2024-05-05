@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Web3 from 'web3';
+import Web3Modal from 'web3modal';
+import WalletConnectProvider from '@walletconnect/web3-provider';
 import TruffleContract from 'truffle-contract';
 import { Container, TextField, Button, Card, CardContent, Typography, CircularProgress, ThemeProvider, createTheme, CardActions, CardMedia, IconButton, AppBar, Toolbar } from '@mui/material';
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
@@ -10,6 +12,10 @@ import { styled } from '@mui/system';
 import { Box, CssBaseline } from '@mui/material';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import { Tooltip } from '@mui/material';
+import Divider from '@mui/material/Divider';
+import Grid from '@mui/material/Grid';
 
 import contentContract from './contracts/ContentContract.json';
 import reputationSystemContract from './contracts/ReputationSystemContract.json';
@@ -86,6 +92,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [loadingVotes, setLoadingVotes] = useState<boolean[]>([]);
   const [snackbar, setSnackbar] = useState<{ open: boolean, message: string, severity: Severity }>({ open: false, message: '', severity: 'info' });
+  const [balance, setBalance] = useState<string>('0');
 
   const provider = new Web3.providers.HttpProvider("http://127.0.0.1:7545");
   const web3 = new Web3(provider);
@@ -94,35 +101,93 @@ const App: React.FC = () => {
   ContentContract.setProvider(web3.currentProvider);
   ReputationSystemContract.setProvider(web3.currentProvider);
 
-  useEffect(() => {
-    const init = async () => {
-      setLoading(true);
-      try {
-        const accounts = await web3.eth.getAccounts();
-        if (accounts.length === 0) {
-          console.error("No accounts found.");
-          return;
+  const web3Modal = new Web3Modal({
+    network: "development", // Match the network to your Ganache
+    cacheProvider: true, // Enables reconnection on page reloads
+    providerOptions: {
+      walletconnect: {
+        package: WalletConnectProvider,
+        options: {
+          rpc: {
+            5777: 'http://127.0.0.1:7545' // Your local Ganache RPC URL
+          }
         }
+      }
+    }
+  });
+
+  // Define the connectWallet function
+  const connectWallet = async () => {
+    const provider = await web3Modal.connect(); // Connect using Web3Modal
+    const web3 = new Web3(provider);
+
+    provider.on("accountsChanged", (accounts: string[]) => {
+      if (accounts.length > 0) {
         setAccount(accounts[0]);
-
-        const reputationInstance = await ReputationSystemContract.deployed();
-        const userReputation = await reputationInstance.getReputation(accounts[0]);
-        setReputation(userReputation.toNumber());
-
-        const contentInstance = await ContentContract.deployed();
-        const contentCountBN = await contentInstance.getContentsCount();
-        const contentCount = contentCountBN.toNumber();
-        loadPosts(contentCount, contentInstance);
+        loadReputationAndPosts(accounts[0], web3);
+      } else {
+        setAccount('');
       }
-      catch (error) {
-        console.error(error);
-        setSnackbar({ open: true, message: 'An error occurred while loading the app.', severity: 'error' });
-      } finally {
-        setLoading(false);
+    });
+
+    provider.on("chainChanged", (_chainId: number) => window.location.reload());
+
+    provider.on("disconnect", (_error: { code: number; message: string }) => {
+      setAccount('');
+    });
+
+    const accounts = await web3.eth.getAccounts();
+    setAccount(accounts[0]);
+    updateBalance(accounts[0]);
+    await loadReputationAndPosts(accounts[0], web3);
+  };
+
+  const updateBalance = async (account: string) => {
+    const balance = await web3.eth.getBalance(account);
+    setBalance(web3.utils.fromWei(balance, 'ether'));
+  };
+
+  const loadReputationAndPosts = async (account: string, web3: Web3) => {
+    setLoading(true);
+    try {
+      const reputationInstance = await ReputationSystemContract.deployed();
+      const userReputation = await reputationInstance.getReputation(account);
+      setReputation(userReputation.toNumber());
+
+      const contentInstance = await ContentContract.deployed();
+      const contentCountBN = await contentInstance.getContentsCount();
+      const contentCount = contentCountBN.toNumber();
+      const fetchedPosts: Post[] = [];
+      for (let i = 0; i < contentCount; i++) {
+        const post = await contentInstance.contents(i);
+        fetchedPosts.push({
+          id: post.id.toNumber(),
+          data: post.data,
+          votes: post.score.toNumber(),
+          isFlagged: post.isFlagged,
+          author: post.author,
+        });
       }
-    };
-    init();
-  }, []);
+      setPosts(fetchedPosts);
+    } catch (error) {
+      console.error("Error loading data", error);
+      setSnackbar({ open: true, message: 'An error occurred while loading the app.', severity: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {  
+    // Initialize wallet connection on component mount
+    if (web3Modal.cachedProvider) {
+      connectWallet();
+    }
+  
+  }, [web3Modal.cachedProvider]);
+
+  const handleConnectWallet = async () => {
+    await connectWallet();
+  };
 
   const loadPosts = async (count, instance) => {
     const fetchedPosts: Post[] = [];
@@ -176,32 +241,71 @@ const App: React.FC = () => {
 
   const handleCloseSnackbar = () => setSnackbar({ ...snackbar, open: false });
 
+  const handleConnectClick = () => {
+    if (account) {
+      disconnectWallet();
+    } else {
+      connectWallet();
+    }
+  };
+
+  const disconnectWallet = () => {
+    web3Modal.clearCachedProvider();
+    setAccount('');
+    setReputation(0);
+    setPosts([]);
+  };
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AppBar position="static">
         <Toolbar>
-          <IconButton edge="start" color="inherit" aria-label="menu" sx={{ mr: 2 }}>
-            <MenuIcon />
-          </IconButton>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Decentralized Content Platform
-          </Typography>
-          <Button color="inherit" onClick={() => {/* handle logout or other action */}}>
-            Logout
-          </Button>
-          <IconButton
-            edge="end"
-            aria-label="account of current user"
-            aria-controls="menu-appbar"
-            aria-haspopup="true"
-            color="inherit"
-          >
-            <AccountCircle />
-          </IconButton>
-          <Typography variant="subtitle1" component="div" sx={{ marginLeft: 2 }}>
-            Reputation: {reputation}
-          </Typography>
+          <Grid container alignItems="center" justifyContent="space-between">
+            <Grid item>
+              <IconButton edge="start" color="inherit" aria-label="menu">
+                <MenuIcon />
+              </IconButton>
+            </Grid>
+            <Grid item xs>
+              <Typography variant="h6" align="center">
+                Decentralized Content Platform
+              </Typography>
+            </Grid>
+            <Grid item>
+              {account ? (
+                <div>
+                  <Tooltip title="Wallet Address">
+                    <IconButton color="inherit">
+                      <AccountCircle />
+                      <Typography variant="caption" sx={{ ml: 1 }}>
+                        {account.substring(0, 6)}...{account.substring(account.length - 4)}
+                      </Typography>
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="ETH Balance">
+                    <IconButton color="inherit">
+                      <AccountBalanceWalletIcon />
+                      <Typography variant="caption" sx={{ ml: 1 }}>
+                        {balance} ETH
+                      </Typography>
+                    </IconButton>
+                  </Tooltip>
+                  <Divider orientation="vertical" flexItem sx={{ mx: 2 }} />
+                  <Typography variant="caption" sx={{ verticalAlign: 'middle' }}>
+                    Reputation: {reputation}
+                  </Typography>
+                  <Button color="inherit" onClick={handleConnectClick} sx={{ ml: 2 }}>
+                    Logout
+                  </Button>
+                </div>
+              ) : (
+                <Button color="inherit" onClick={handleConnectClick}>
+                  Connect Wallet
+                </Button>
+              )}
+            </Grid>
+          </Grid>
         </Toolbar>
       </AppBar>
       <Container maxWidth="md">

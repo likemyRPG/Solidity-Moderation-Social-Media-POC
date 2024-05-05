@@ -1,6 +1,7 @@
 // Import types and utilities from webpack if needed
 import * as webpack from 'webpack';
 import path from 'path';
+import { assert } from 'console';
 
 // This empty export statement will change the file context to a module
 export {};
@@ -17,7 +18,8 @@ module.exports = {
         https: require.resolve('https-browserify'),
         os: require.resolve('os-browserify/browser'),
         stream: require.resolve('stream-browserify'),
-        url: require.resolve('url/')
+        url: require.resolve('url/'),
+        assert: require.resolve('assert/'),
       };
 
       webpackConfig.plugins.push(
