@@ -6,21 +6,19 @@ import TruffleContract from 'truffle-contract';
 import { Container, TextField, Button, Card, CardContent, Typography, CircularProgress, ThemeProvider, createTheme, CardActions, CardMedia, IconButton, AppBar, Toolbar } from '@mui/material';
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import ThumbDownIcon from '@mui/icons-material/ThumbDown';
-import MenuIcon from '@mui/icons-material/Menu';
 import AccountCircle from '@mui/icons-material/AccountCircle';
 import { styled } from '@mui/system';
 import { Box, CssBaseline } from '@mui/material';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import { Tooltip } from '@mui/material';
-import Divider from '@mui/material/Divider';
-import Grid from '@mui/material/Grid';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 
 import contentContract from './contracts/ContentContract.json';
 import reputationSystemContract from './contracts/ReputationSystemContract.json';
+
+import BlockchainActivityLog from './components/BlockchainActivityLog';
 
 const theme = createTheme({
   palette: {
@@ -308,6 +306,7 @@ const App: React.FC = () => {
           )}
         </Toolbar>
       </AppBar>
+      <BlockchainActivityLog web3={web3} />
       <Container maxWidth="md">
       <Typography variant="h4" align="center" sx={{ my: 4 }}>
           {account ? 'Post Your Thoughts' : 'Connect Your Wallet'}
