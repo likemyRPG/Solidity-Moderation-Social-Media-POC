@@ -26,36 +26,89 @@ const BlockchainActivityLog: React.FC<BlockchainActivityLogProps> = ({ web3 }) =
     author: ''
   });
 
-  useEffect(() => {
-    const networkId = '5777';
-    const abi: AbiItem[] = contractData.abi as AbiItem[];
-    const ContentContract = new web3.eth.Contract(abi, contractData.networks[networkId].address);
+  const addEvents = (newEvents) => {
+    setEvents(prevEvents => [...prevEvents, ...newEvents]);
+  };  
 
+  let contentCreatedSubscription: any;
+  let contentFlaggedSubscription: any;
+  let scoreUpdatedSubscription: any;
+
+  const setupEventListeners = (contract) => {
+    contentCreatedSubscription = contract.events.ContentCreated({
+      fromBlock: 'latest'
+    })
+    .on('data', event => {
+      console.log("New ContentCreated Event:", event);
+      const formattedEvent = formatEvent(event);
+      addEvents([formattedEvent]);
+    })
+    .on('error', error => console.error(error));
+  
+    contentFlaggedSubscription = contract.events.ContentFlagged({
+      fromBlock: 'latest'
+    })
+    .on('data', event => {
+      console.log("New ContentFlagged Event:", event);
+      const formattedEvent = formatEvent(event);
+      addEvents([formattedEvent]);
+    })
+    
+    scoreUpdatedSubscription = contract.events.ScoreUpdated({
+      fromBlock: 'latest'
+    })
+    .on('data', event => {
+      console.log("New ScoreUpdated Event:", event);
+      const formattedEvent = formatEvent(event);
+      addEvents([formattedEvent]);
+    })
+  };
+
+  const formatEvent = (event) => {
+    // Assuming you have a block timestamp, you might need to fetch it if not provided directly
+    return {
+      event: event.event,
+      blockNumber: event.blockNumber,
+      timestamp: new Date().toLocaleString(), // This might need adjustment to fetch actual block timestamp
+      transactionHash: event.transactionHash,
+      returnValues: event.returnValues,
+    };
+  };
+  
+
+  useEffect(() => {
+    const networkId = '5777'; // Ensure this is correct
+    const abi: AbiItem[] = contractData.abi as AbiItem[];
+    const contractAddress = contractData.networks[networkId]?.address;
+    if (!contractAddress) {
+      console.error('Contract address not found for the network ID:', networkId);
+      return;
+    }
+  
+    const ContentContract = new web3.eth.Contract(abi, contractAddress);
+  
     const fetchEvents = async () => {
       try {
-        const eventList = await ContentContract.getPastEvents('AllEvents', {
+        const eventList = await ContentContract.getPastEvents('ContentCreated', { // Example event
           fromBlock: 0,
           toBlock: 'latest'
         });
-        const formattedEvents: IBlockchainEvent[] = await Promise.all(eventList.map(async (event) => {
-          const block: any = await web3.eth.getBlock(event.blockNumber);
-          return {
-            event: event.event,
-            blockNumber: event.blockNumber,
-            timestamp: new Date(block.timestamp * 1000).toLocaleString(),
-            transactionHash: event.transactionHash,
-            returnValues: event.returnValues,
-          };
-        }));
-        setEvents(formattedEvents);
-        setFilteredEvents(formattedEvents);
+        addEvents(eventList as any);
       } catch (error) {
         console.error('Error fetching events:', error);
       }
     };
-
+  
     fetchEvents();
+    setupEventListeners(ContentContract);
+  
+    return () => {
+      contentCreatedSubscription.unsubscribe();
+      contentFlaggedSubscription.unsubscribe();
+      scoreUpdatedSubscription.unsubscribe();
+    };
   }, [web3]);
+  
 
   useEffect(() => {
     const results = events.filter(event =>
