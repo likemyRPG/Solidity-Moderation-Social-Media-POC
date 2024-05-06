@@ -27,7 +27,7 @@ const BlockchainActivityLog: React.FC<BlockchainActivityLogProps> = ({ web3 }) =
   });
 
   const addEvents = (newEvents) => {
-    setEvents(prevEvents => [...prevEvents, ...newEvents]);
+    setEvents(prevEvents => [...newEvents, ...prevEvents]);
   };  
 
   let contentCreatedSubscription: any;
@@ -39,42 +39,52 @@ const BlockchainActivityLog: React.FC<BlockchainActivityLogProps> = ({ web3 }) =
       fromBlock: 'latest'
     })
     .on('data', event => {
-      console.log("New ContentCreated Event:", event);
-      const formattedEvent = formatEvent(event);
-      addEvents([formattedEvent]);
+      formatEvent(event).then(formattedEvent => {
+        addEvents([formattedEvent]);
+      }).catch(console.error);
     })
-    .on('error', error => console.error(error));
+    .on('error', console.error);
   
     contentFlaggedSubscription = contract.events.ContentFlagged({
       fromBlock: 'latest'
     })
     .on('data', event => {
-      console.log("New ContentFlagged Event:", event);
-      const formattedEvent = formatEvent(event);
-      addEvents([formattedEvent]);
-    })
-    
+      formatEvent(event).then(formattedEvent => {
+        addEvents([formattedEvent]);
+      }).catch(console.error);
+    });
+  
     scoreUpdatedSubscription = contract.events.ScoreUpdated({
       fromBlock: 'latest'
     })
     .on('data', event => {
-      console.log("New ScoreUpdated Event:", event);
-      const formattedEvent = formatEvent(event);
-      addEvents([formattedEvent]);
-    })
+      formatEvent(event).then(formattedEvent => {
+        addEvents([formattedEvent]);
+      }).catch(console.error);
+    });
   };
+  
 
-  const formatEvent = (event) => {
-    // Assuming you have a block timestamp, you might need to fetch it if not provided directly
+  const formatEvent = async (event) => {
+    const block: any = await web3.eth.getBlock(event.blockNumber);
     return {
       event: event.event,
       blockNumber: event.blockNumber,
-      timestamp: new Date().toLocaleString(), // This might need adjustment to fetch actual block timestamp
+      timestamp: new Date(block.timestamp * 1000).toLocaleString(),
       transactionHash: event.transactionHash,
       returnValues: event.returnValues,
+      isNew: true
     };
   };
   
+  const clearNewFlags = () => {
+    setEvents(prevEvents => prevEvents.map(event => ({ ...event, isNew: false })));
+  };
+  
+  useEffect(() => {
+    const interval = setInterval(clearNewFlags, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const networkId = '5777'; // Ensure this is correct
@@ -89,15 +99,19 @@ const BlockchainActivityLog: React.FC<BlockchainActivityLogProps> = ({ web3 }) =
   
     const fetchEvents = async () => {
       try {
-        const eventList = await ContentContract.getPastEvents('ContentCreated', { // Example event
+        const eventList = await ContentContract.getPastEvents('AllEvents', {
           fromBlock: 0,
           toBlock: 'latest'
         });
-        addEvents(eventList as any);
+        const formattedEvents = await Promise.all(eventList.map(formatEvent));
+        // Sort by block number in descending order
+        formattedEvents.sort((a, b) => b.blockNumber - a.blockNumber);
+        addEvents(formattedEvents);
       } catch (error) {
         console.error('Error fetching events:', error);
       }
-    };
+    };    
+    
   
     fetchEvents();
     setupEventListeners(ContentContract);
@@ -149,9 +163,9 @@ const BlockchainActivityLog: React.FC<BlockchainActivityLogProps> = ({ web3 }) =
           />
         </Box>
         <List sx={{ width: '100%' }}>
-          {filteredEvents.map((event, index) => (
+          {filteredEvents.map((event: any, index) => (
             <React.Fragment key={index}>
-              <ListItem>
+              <ListItem sx={{ bgcolor: event.isNew ? 'rgba(0, 255, 0, 0.1)' : 'inherit' }}>
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={6}>
                     <Typography variant="subtitle1">{event.event}</Typography>
