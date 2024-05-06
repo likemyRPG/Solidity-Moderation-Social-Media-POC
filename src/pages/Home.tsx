@@ -10,6 +10,7 @@ import theme from 'src/theme';
 import Tooltip from '@mui/material/Tooltip';
 
 import contentContract from '../contracts/ContentContract.json';
+import votingContract from '../contracts/VotingContract.json';
 import reputationSystemContract from '../contracts/ReputationSystemContract.json';
 import { useSnackbar } from '../context/SnackbarContext';
 
@@ -49,29 +50,32 @@ const Home: React.FC<HomeProps> = ({ web3, account }) => {
   const [loading, setLoading] = useState<boolean>(false);
   const [loadingVotes, setLoadingVotes] = useState<boolean[]>([]);
   const { setSnackbar } = useSnackbar();
+  const requiredReputationToVote = 10; // Set the required reputation to vote here
 
   const ContentContract = TruffleContract(contentContract);
   const ReputationSystemContract = TruffleContract(reputationSystemContract);
+  const VotingContract = TruffleContract(votingContract);
   ContentContract.setProvider(web3.currentProvider);
   ReputationSystemContract.setProvider(web3.currentProvider);
+  VotingContract.setProvider(web3.currentProvider);
 
 
-  const loadReputationAndPosts = async (account: string, web3: Web3) => {
+  const loadReputationAndPosts = async (account, web3) => {
     const ContentContract = TruffleContract(contentContract);
     ContentContract.setProvider(web3.currentProvider);
-  
+    
     const ReputationSystemContract = TruffleContract(reputationSystemContract);
     ReputationSystemContract.setProvider(web3.currentProvider);
-  
+    
     setLoading(true);
     try {
       const reputationInstance = await ReputationSystemContract.deployed();
-      const userReputation = await reputationInstance.getReputation.call(account);
+      const userReputation = await reputationInstance.getReputation(account);
+      const requiredReputationToVote = await reputationInstance.getRequiredReputationToVote();
       setReputation(userReputation.toNumber());
-  
+    
       const contentInstance = await ContentContract.deployed();
-      const contentCountBN = await contentInstance.getContentsCount.call();
-      const contentCount = contentCountBN.toNumber();
+      const contentCount = (await contentInstance.getContentsCount()).toNumber(); // Simplified
       const fetchedPosts: Post[] = [];
       for (let i = 0; i < contentCount; i++) {
         const post = await contentInstance.contents(i);
@@ -92,29 +96,13 @@ const Home: React.FC<HomeProps> = ({ web3, account }) => {
       setLoading(false);
     }
   };
+  
 
   useEffect(() => {
     if (account && web3) {
       loadReputationAndPosts(account, web3);
     }
   }, [account, web3]);
-
-  const loadPosts = async (count, instance) => {
-    const fetchedPosts: Post[] = [];
-    console.log(fetchedPosts)
-    for (let i = 0; i < count; i++) {
-      const post = await instance.contents(i);
-      console.log(post)
-      fetchedPosts.push({
-        id: post.id.toNumber(),
-        data: post.data,
-        votes: post.score.toNumber(),
-        isFlagged: post.isFlagged,
-        author: post.author,
-      });
-    }
-    setPosts(fetchedPosts);
-  };
 
   const handleNewPost = async () => {
     setLoading(true);
@@ -140,25 +128,39 @@ const Home: React.FC<HomeProps> = ({ web3, account }) => {
     }
 };
 
-  
-  const handleVote = async (postId, upvote) => {
-    setLoadingVotes(prev => ({ ...prev, [postId]: true }));
-    try {
-      const contentInstance = await ContentContract.deployed();
-      const change = upvote ? 1 : -1;
-      await contentInstance.updateScore(postId, change, { from: account });
-      const updatedPost = await contentInstance.contents(postId);
+const handleIncreaseReputation = async () => {
+  try {
+    const reputationInstance = await ReputationSystemContract.deployed();
+    await reputationInstance.adjustReputationAdmin(account, 10, { from: account });
+    loadReputationAndPosts(account, web3);
+    setSnackbar({ open: true, message: 'Reputation successfully increased.', severity: 'success' });
+  } catch (error) {
+    console.error("Failed to increase reputation", error);
+    setSnackbar({ open: true, message: 'Failed to increase reputation.', severity: 'error' });
+  }
+};
+    
+const handleVote = async (postId, upvote) => {
+  if (reputation < requiredReputationToVote) {  // `requiredReputationToVote` is the threshold set in your contract
+      setSnackbar({ open: true, message: 'Insufficient reputation to vote. Please participate more to gain reputation.', severity: 'error' });
+      return;
+  }
+
+  setLoadingVotes(prev => ({ ...prev, [postId]: true }));
+  try {
+      const votingContractInstance = await VotingContract.deployed();
+      await votingContractInstance.vote(postId, upvote, { from: account });
+      const updatedPost = await ContentContract.deployed().then(instance => instance.contents(postId));
       setPosts(prevPosts => prevPosts.map(post => post.id === postId ? { ...post, votes: updatedPost.score.toNumber() } : post));
       setSnackbar({ open: true, message: 'Successfully voted.', severity: 'success' });
-    } catch (error: any) {
+  } catch (error) {
       console.error("Error voting", error);
-      const errorMessage = error.code === 4001 ? 'Transaction signature denied.' : 'Failed to vote.';
+      let errorMessage = 'Failed to vote. Please try again.';
       setSnackbar({ open: true, message: errorMessage, severity: 'error' });
-    } finally {
+  } finally {
       setLoadingVotes(prev => ({ ...prev, [postId]: false }));
-    }
-  };
-
+  }
+};
 
   return (
     <ThemeProvider theme={theme}>
@@ -167,6 +169,9 @@ const Home: React.FC<HomeProps> = ({ web3, account }) => {
       <Typography variant="h4" align="center" sx={{ my: 4 }}>
           {account ? 'Post Your Thoughts' : 'Connect Your Wallet'}
         </Typography>
+        <Button onClick={handleIncreaseReputation} variant="contained" color="primary" disabled={loading}>
+          Increase Reputation
+        </Button>
         {account ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', flexDirection: 'column', alignItems: 'center', mt: 3 }}>
             <TextField

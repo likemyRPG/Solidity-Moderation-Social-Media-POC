@@ -1,16 +1,16 @@
-const SimpleStorage = artifacts.require("./SimpleStorage.sol");
-const MetaCoin = artifacts.require("./MetaCoin.sol");
 const ContentContract = artifacts.require("./ContentContract.sol");
 const ReputationSystemContract = artifacts.require("./ReputationSystemContract.sol");
 const VotingContract = artifacts.require("./VotingContract.sol");
 
-module.exports = function(deployer) {
-  deployer.deploy(SimpleStorage);
-  deployer.deploy(MetaCoin);
-  deployer.deploy(ContentContract).then(function() {
-    return deployer.deploy(ReputationSystemContract).then(function() {
-      return deployer.deploy(VotingContract, ContentContract.address, ReputationSystemContract.address);
-    });
-  }
-  );
-}
+module.exports = async function(deployer) {
+    // First, deploy the ReputationSystemContract
+    await deployer.deploy(ReputationSystemContract);
+    const reputationSystem = await ReputationSystemContract.deployed();
+
+    // Next, deploy the ContentContract with the address of the deployed ReputationSystemContract
+    await deployer.deploy(ContentContract, reputationSystem.address);
+    const contentContract = await ContentContract.deployed();
+
+    // Finally, deploy the VotingContract with the addresses of the deployed ContentContract and ReputationSystemContract
+    await deployer.deploy(VotingContract, contentContract.address, reputationSystem.address);
+};
