@@ -14,6 +14,7 @@ contract ContentContract {
     }
 
     Content[] public contents;
+    mapping(address => uint[]) private authorContents;
     int public flagThreshold = -10;
     int public recoveryThreshold = -5;
     ReputationSystemContract reputationSystem;
@@ -37,6 +38,7 @@ contract ContentContract {
             finalDecision: false
         }));
         uint id = contents.length - 1;
+        authorContents[msg.sender].push(id);
         emit ContentCreated(id, msg.sender, _data);
     }
 
@@ -79,5 +81,23 @@ contract ContentContract {
 
     function isContentFlagged(uint _id) public view returns (bool) {
         return contents[_id].isFlagged;
+    }
+
+    function getAuthorContents(address _author) public view returns (uint[] memory) {
+        return authorContents[_author];
+    }
+
+    function getAuthorScore(address _author) public view returns (int) {
+        uint[] memory authorContentIds = authorContents[_author];
+        int totalScore = 0;
+        for (uint i = 0; i < authorContentIds.length; i++) {
+            totalScore += contents[authorContentIds[i]].score;
+        }
+        return totalScore;
+    }
+
+    function getContent(uint _id) public view returns (uint, string memory, address, bool, int, bool) {
+        Content memory content = contents[_id];
+        return (content.id, content.data, content.author, content.isFlagged, content.score, content.finalDecision);
     }
 }

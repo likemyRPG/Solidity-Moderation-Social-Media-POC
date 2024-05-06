@@ -12,6 +12,7 @@ import WalletConnectProvider from '@walletconnect/web3-provider';
 import NavBar from './components/Navbar';
 import reputationSystemContract from './contracts/ReputationSystemContract.json';
 import { SnackbarProvider } from './context/SnackbarContext';
+import UserProfile from './components/UserProfile';
 
 
 const Web3Context = createContext({ web3: null, account: '' });
@@ -166,6 +167,7 @@ const App: React.FC = () => {
               <Route path="/" element={web3 ? <Home web3={web3} account={account} /> : <ConnectWalletPrompt connectWallet={connectWallet} />} />
               <Route path="/activity-log" element={web3 ? <BlockchainActivityLog web3={web3} /> : <ConnectWalletPrompt connectWallet={connectWallet} />} />
               <Route path="/benefits" element={<DecentralizationBenefits />} />
+              <Route path="/profile" element={web3? <UserProfile web3={web3} account={account} /> : <ConnectWalletPrompt connectWallet={connectWallet} />} />
             </Routes>
           </Container>
         </Web3Context.Provider>

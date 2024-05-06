@@ -12,6 +12,7 @@ import Tooltip from '@mui/material/Tooltip';
 import contentContract from '../contracts/ContentContract.json';
 import votingContract from '../contracts/VotingContract.json';
 import reputationSystemContract from '../contracts/ReputationSystemContract.json';
+import consentContract from '../contracts/ConsentContract.json';
 import { useSnackbar } from '../context/SnackbarContext';
 
 const StyledCard = styled(Card)({
@@ -49,6 +50,7 @@ const Home: React.FC<HomeProps> = ({ web3, account }) => {
   const [newPost, setNewPost] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [loadingVotes, setLoadingVotes] = useState<boolean[]>([]);
+  const [consentGiven, setConsentGiven] = useState<boolean>(false); // Consent status
   const { setSnackbar } = useSnackbar();
   const requiredReputationToVote = 10; // Set the required reputation to vote here
 
@@ -99,36 +101,65 @@ const Home: React.FC<HomeProps> = ({ web3, account }) => {
   
 
   useEffect(() => {
-    if (account && web3) {
-      loadReputationAndPosts(account, web3);
-    }
+    const checkConsentAndLoadData = async () => {
+      if (!web3 || !account) return;
+
+      const Consent = TruffleContract(consentContract);
+      Consent.setProvider(web3.currentProvider);
+      const consentInstance = await Consent.deployed();
+
+      try {
+        const consentStatus = await consentInstance.checkConsent(account);
+        setConsentGiven(consentStatus);
+        if (!consentStatus) {
+          setSnackbar({ open: true, message: 'Consent is required to interact with the platform.', severity: 'warning' });
+          return; // Stop further execution if no consent
+        }
+
+        // Load data if consent is given
+        loadReputationAndPosts(account, web3);
+      } catch (error) {
+        console.error("Error checking consent:", error);
+        setSnackbar({ open: true, message: 'Failed to check consent status.', severity: 'error' });
+      }
+    };
+
+    checkConsentAndLoadData();
   }, [account, web3]);
 
   const handleNewPost = async () => {
+    if (!consentGiven) {
+      setSnackbar({ open: true, message: 'Consent required to post.', severity: 'info' });
+      return;
+    }
     setLoading(true);
     try {
-        const contentInstance = await ContentContract.deployed();
-        await contentInstance.createContent(newPost, { from: account })
-            .then(() => {
-                setNewPost('');
-                setSnackbar({ open: true, message: 'Successfully posted.', severity: 'success' });
-            })
-            .catch((error) => {
-                if (error.code === 4001) { // Check if the rejection is because the user denied the transaction
-                    setSnackbar({ open: true, message: 'Transaction signature denied by user.', severity: 'info' });
-                } else {
-                    throw error; // Rethrow if it's a different error
-                }
-            });
+      const contentInstance = await ContentContract.deployed();
+      await contentInstance.createContent(newPost, { from: account })
+          .then(() => {
+              setNewPost('');
+              setSnackbar({ open: true, message: 'Successfully posted.', severity: 'success' });
+          })
+          .catch((error) => {
+              if (error.code === 4001) { // Check if the rejection is because the user denied the transaction
+                  setSnackbar({ open: true, message: 'Transaction signature denied by user.', severity: 'info' });
+              } else {
+                  throw error; // Rethrow if it's a different error
+              }
+          });
     } catch (error: any) {
-        console.error("Failed to post", error);
-        setSnackbar({ open: true, message: `Failed to post due to an error: ${error.message}`, severity: 'error' });
+      console.error("Failed to post", error);
+      setSnackbar({ open: true, message: `Failed to post due to an error: ${error.message}`, severity: 'error' });
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
-};
+  };
 
 const handleIncreaseReputation = async () => {
+  if (!consentGiven) {
+    setSnackbar({ open: true, message: 'Consent required to modify reputation.', severity: 'info' });
+    return;
+  }
   try {
     const reputationInstance = await ReputationSystemContract.deployed();
     await reputationInstance.adjustReputationAdmin(account, 10, { from: account });
@@ -141,6 +172,11 @@ const handleIncreaseReputation = async () => {
 };
     
 const handleVote = async (postId, upvote) => {
+  if (!consentGiven) {
+    setSnackbar({ open: true, message: 'Consent required to vote.', severity: 'info' });
+    return;
+  }
+
   if (reputation < requiredReputationToVote) {  // `requiredReputationToVote` is the threshold set in your contract
       setSnackbar({ open: true, message: 'Insufficient reputation to vote. Please participate more to gain reputation.', severity: 'error' });
       return;
@@ -181,6 +217,7 @@ const handleVote = async (postId, upvote) => {
               onChange={e => setNewPost(e.target.value)}
               variant="outlined"
               sx={{ width: '80%' }}
+              disabled={!consentGiven || loading}
             />
             <Button variant="contained" color="primary" onClick={handleNewPost} disabled={!newPost || loading} sx={{ mt: 2 }}>
               Post
@@ -214,7 +251,7 @@ const handleVote = async (postId, upvote) => {
                 <IconButton
                   aria-label="upvote"
                   onClick={() => handleVote(post.id, true)}
-                  disabled={loadingVotes[post.id]}
+                  disabled={loadingVotes[post.id] || reputation < requiredReputationToVote || !consentGiven}
                 >
                   {loadingVotes[post.id] ? <CircularProgress size={24} /> : <ThumbUpIcon color="primary" />}
                 </IconButton>
@@ -223,7 +260,7 @@ const handleVote = async (postId, upvote) => {
                 <IconButton
                   aria-label="downvote"
                   onClick={() => handleVote(post.id, false)}
-                  disabled={loadingVotes[post.id]}
+                  disabled={loadingVotes[post.id] || reputation < requiredReputationToVote || !consentGiven}
                 >
                   {loadingVotes[post.id] ? <CircularProgress size={24} /> : <ThumbDownIcon color="error" />}
                 </IconButton>

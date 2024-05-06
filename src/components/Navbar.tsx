@@ -59,6 +59,10 @@ const NavBar: React.FC<NavBarProps> = ({
                   {account.substring(0, 6)}...{account.substring(account.length - 4)}
                 </Typography>
               </MenuItem>
+              {/* Profile button */}
+              <MenuItem onClick={handleMenuClose} component={Link} to="/profile">
+                Profile
+              </MenuItem>
               <MenuItem onClick={disconnectWallet}>Logout</MenuItem>
             </Menu>
           </>
