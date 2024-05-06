@@ -10,8 +10,7 @@ import Web3Modal from 'web3modal';
 import WalletConnectProvider from '@walletconnect/web3-provider';
 import NavBar from './components/Navbar';
 import reputationSystemContract from './contracts/ReputationSystemContract.json';
-import { Snackbar, Alert } from '@mui/material';
-import { SnackbarProvider, useSnackbar } from './context/SnackbarContext';
+import { SnackbarProvider } from './context/SnackbarContext';
 
 
 const Web3Context = createContext({ web3: null, account: '' });
@@ -25,8 +24,8 @@ const App: React.FC = () => {
   const [balance, setBalance] = useState<string>('0');
 
   const web3Modal = new Web3Modal({
-    network: "development", // Match the network to your Ganache
-    cacheProvider: true, // Enables reconnection on page reloads
+    network: "development",
+    cacheProvider: true,
     providerOptions: {
       walletconnect: {
         package: WalletConnectProvider,
@@ -83,10 +82,9 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // Function to handle unhandled promise rejections
     const handleUnhandledRejection = event => {
       console.error('Unhandled rejection:', event.promise, 'reason:', event.reason);
-      event.preventDefault(); // Prevent the default handling (e.g., console.error)
+      event.preventDefault();
     };
 
     window.addEventListener('unhandledrejection', handleUnhandledRejection);

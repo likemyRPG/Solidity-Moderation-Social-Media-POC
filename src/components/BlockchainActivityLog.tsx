@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, Typography, List, ListItem, Divider, Grid, Tooltip, TextField, MenuItem } from '@mui/material';
+import { Card, CardContent, Typography, List, ListItem, Divider, Grid, Tooltip, TextField, Box } from '@mui/material';
 import Web3 from 'web3';
 import contractData from '../contracts/ContentContract.json';
 import { AbiItem } from 'web3-utils';
@@ -21,7 +21,10 @@ interface BlockchainActivityLogProps {
 const BlockchainActivityLog: React.FC<BlockchainActivityLogProps> = ({ web3 }) => {
   const [events, setEvents] = useState<IBlockchainEvent[]>([]);
   const [filteredEvents, setFilteredEvents] = useState<IBlockchainEvent[]>([]);
-  const [filter, setFilter] = useState('');
+  const [filters, setFilters] = useState({
+    event: '',
+    author: ''
+  });
 
   useEffect(() => {
     const networkId = '5777';
@@ -55,14 +58,20 @@ const BlockchainActivityLog: React.FC<BlockchainActivityLogProps> = ({ web3 }) =
   }, [web3]);
 
   useEffect(() => {
-    if (filter) {
-      const lowerCaseFilter = filter.toLowerCase();
-      const filtered = events.filter(event => event.event.toLowerCase().includes(lowerCaseFilter));
-      setFilteredEvents(filtered);
-    } else {
-      setFilteredEvents(events);
-    }
-  }, [filter, events]);
+    const results = events.filter(event =>
+      (event.event.toLowerCase().includes(filters.event.toLowerCase()) || !filters.event) &&
+      (event.returnValues.author?.toLowerCase().includes(filters.author.toLowerCase()) || !filters.author)
+    );
+    setFilteredEvents(results);
+  }, [filters, events]);
+
+  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFilters(prevFilters => ({
+      ...prevFilters,
+      [name]: value
+    }));
+  };
 
   return (
     <Card sx={{ margin: 2, width: '100%' }}>
@@ -70,14 +79,22 @@ const BlockchainActivityLog: React.FC<BlockchainActivityLogProps> = ({ web3 }) =
         <Typography variant="h6" gutterBottom>
           Blockchain Activity Log
         </Typography>
-        <TextField
-          fullWidth
-          label="Filter Events"
-          variant="outlined"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          sx={{ marginBottom: 2 }}
-        />
+        <Box sx={{ display: 'flex', gap: 2, marginBottom: 2 }}>
+          <TextField
+            label="Filter by Event"
+            variant="outlined"
+            name="event"
+            value={filters.event}
+            onChange={handleFilterChange}
+          />
+          <TextField
+            label="Filter by Author"
+            variant="outlined"
+            name="author"
+            value={filters.author}
+            onChange={handleFilterChange}
+          />
+        </Box>
         <List sx={{ width: '100%' }}>
           {filteredEvents.map((event, index) => (
             <React.Fragment key={index}>

@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import Web3 from 'web3';
 import TruffleContract from 'truffle-contract';
-import { Container, TextField, Button, Card, CardContent, Typography, CircularProgress, ThemeProvider, createTheme, CardActions, CardMedia, IconButton, AppBar, Toolbar } from '@mui/material';
+import { Container, TextField, Button, Card, CardContent, Typography, CircularProgress, ThemeProvider, CardActions, CardMedia, IconButton } from '@mui/material';
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import ThumbDownIcon from '@mui/icons-material/ThumbDown';
 import { styled } from '@mui/system';
 import { Box, CssBaseline } from '@mui/material';
-import Snackbar from '@mui/material/Snackbar';
-import Alert from '@mui/material/Alert'
 import theme from 'src/theme';
 
 import contentContract from '../contracts/ContentContract.json';
