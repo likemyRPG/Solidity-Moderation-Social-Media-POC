@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ThemeProvider, CssBaseline, Container } from '@mui/material';
 import Home from './pages/Home'; 
 import BlockchainActivityLog from './components/BlockchainActivityLog';
+import DecentralizationBenefits from './components/DecentralizationBenefits';
 import ConnectWalletPrompt from './components/ConnectWalletPrompt';
 import theme from './theme'; 
 import Web3 from 'web3';
@@ -164,6 +165,7 @@ const App: React.FC = () => {
             <Routes>
               <Route path="/" element={web3 ? <Home web3={web3} account={account} /> : <ConnectWalletPrompt connectWallet={connectWallet} />} />
               <Route path="/activity-log" element={web3 ? <BlockchainActivityLog web3={web3} /> : <ConnectWalletPrompt connectWallet={connectWallet} />} />
+              <Route path="/benefits" element={<DecentralizationBenefits />} />
             </Routes>
           </Container>
         </Web3Context.Provider>

@@ -37,6 +37,7 @@ const NavBar: React.FC<NavBarProps> = ({
         <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center' }}>
           <Button color="inherit" component={Link} to="/">Home</Button>
           <Button color="inherit" component={Link} to="/activity-log">Activity Log</Button>
+          <Button color="inherit" component={Link} to="/benefits">Benefits</Button>
         </Box>
         {account ? (
           <>

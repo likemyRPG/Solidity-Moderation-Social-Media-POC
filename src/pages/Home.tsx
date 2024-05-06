@@ -7,6 +7,7 @@ import ThumbDownIcon from '@mui/icons-material/ThumbDown';
 import { styled } from '@mui/system';
 import { Box, CssBaseline } from '@mui/material';
 import theme from 'src/theme';
+import Tooltip from '@mui/material/Tooltip';
 
 import contentContract from '../contracts/ContentContract.json';
 import reputationSystemContract from '../contracts/ReputationSystemContract.json';
@@ -204,20 +205,24 @@ const Home: React.FC<HomeProps> = ({ web3, account }) => {
                 </Typography>
               </CardContent>
               <CardActions disableSpacing>
-              <IconButton
-                aria-label="upvote"
-                onClick={() => handleVote(post.id, true)}
-                disabled={loadingVotes[post.id]}
-              >
-                {loadingVotes[post.id] ? <CircularProgress size={24} /> : <ThumbUpIcon color="primary" />}
-              </IconButton>
-              <IconButton
-                aria-label="downvote"
-                onClick={() => handleVote(post.id, false)}
-                disabled={loadingVotes[post.id]}
-              >
-                {loadingVotes[post.id] ? <CircularProgress size={24} /> : <ThumbDownIcon color="error" />}
-              </IconButton>
+              <Tooltip title="Votes are securely and transparently recorded on the blockchain, ensuring that all voting activity is verifiable and tamper-proof.">
+                <IconButton
+                  aria-label="upvote"
+                  onClick={() => handleVote(post.id, true)}
+                  disabled={loadingVotes[post.id]}
+                >
+                  {loadingVotes[post.id] ? <CircularProgress size={24} /> : <ThumbUpIcon color="primary" />}
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Votes are securely and transparently recorded on the blockchain, ensuring that all voting activity is verifiable and tamper-proof.">
+                <IconButton
+                  aria-label="downvote"
+                  onClick={() => handleVote(post.id, false)}
+                  disabled={loadingVotes[post.id]}
+                >
+                  {loadingVotes[post.id] ? <CircularProgress size={24} /> : <ThumbDownIcon color="error" />}
+                </IconButton>
+              </Tooltip>
                 <Typography sx={{ marginLeft: 'auto' }}>Votes: {post.votes}</Typography>
               </CardActions>
             </StyledCard>
